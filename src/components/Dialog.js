@@ -3,6 +3,10 @@ import axios from 'axios';
 import './Dialog.css';
 
 const Dialog = ({ onGeoJsonUpdate }) => {
+
+  // Log onGeoJsonUpdate at component render to see if it’s a function
+  console.log("onGeoJsonUpdate function has type:", typeof onGeoJsonUpdate);
+
   const [query, setQuery] = useState('');
   const [conversation, setConversation] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +28,7 @@ const Dialog = ({ onGeoJsonUpdate }) => {
     setErrorMessage('');
     setIsLoading(true);
 
-    const augmentedQuery = `${query} If there is a mention of a geographical object in the answer, provide position/shape as GeoJSON doc at the end.`;
+    const augmentedQuery = `${query} Respond only in well-formed JSON with two attributes (response and geo). Dont add any text ouu of JSON document. Don't explain the technical details about formatting, JSON or GeoJSON. Put response text in the first JSON attribute called "response". The second attribute "geo" should be an array of GeoJSON objects if there are geographical objects mentioned in the response text, otherwise an empty array.`;
 
     try {
       const response = await axios.post('/api/generate', {
@@ -33,26 +37,35 @@ const Dialog = ({ onGeoJsonUpdate }) => {
         prompt: augmentedQuery,
       });
 
-      const answer = response.data?.answer || 'No answer provided by the LLM.';
+      console.log("Response Original:", response.data);
 
-      // Update conversation history
+      // Check if the response field is present in the server response
+      // Step 1: Extract and parse the stringified JSON in `response.data.response`
+      const parsedResponse = JSON.parse(response.data?.response || '{}');
+
+      // Step 2: Extract `response` text and `geo` data from parsed JSON
+      const answer = parsedResponse?.response || 'No response from the LLM.';
+      const geoData = parsedResponse?.geo || [];
+
+      // Log the extracted response and geo data
+      console.log("Response Full:", parsedResponse);
+      console.log("Response Text:", answer);
+      console.log("Geo Data:", geoData);
+
+      // Update conversation history with user query and LLM response
       setConversation((prev) => [
         ...prev,
         { type: 'user', text: query },
         { type: 'llm', text: answer },
       ]);
 
-      // Attempt to extract GeoJSON if present
-      let geoJson = null;
-      const geoJsonMatch = answer.match(/(\{.*"type":\s?"FeatureCollection".*\})/);
-      if (geoJsonMatch) {
-        try {
-          geoJson = JSON.parse(geoJsonMatch[0]);
-          onGeoJsonUpdate(geoJson);
-        } catch (error) {
-          console.error('Error parsing GeoJSON:', error);
-        }
+      // Explicitly check if onGeoJsonUpdate is a function before calling it
+      if (typeof onGeoJsonUpdate === 'function') {
+        onGeoJsonUpdate(geoData);
+      } else {
+        console.warn("onGeoJsonUpdate is not a function.");
       }
+
 
       setQuery(''); // Clear input field
     } catch (error) {
@@ -76,7 +89,6 @@ const Dialog = ({ onGeoJsonUpdate }) => {
         ))}
         {isLoading && <div className="loading">Thinking...</div>}
         {errorMessage && <div className="error">{errorMessage}</div>}
-        <div ref={conversationEndRef} />
       </div>
       <div className="input-area">
         <input

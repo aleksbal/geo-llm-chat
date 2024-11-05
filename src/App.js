@@ -7,12 +7,16 @@ import MapDisplay from './components/MapDisplay';
 import './App.css';
 
 function App() {
-  const [geoJSONData, setGeoJSONData] = useState(null);
+  const [geoJSONData, setGeoJSONData] = useState([]);
   const mapRef = useRef(null);
 
   const handleGeoJSONUpdate = (geoJSON) => {
+    console.log("Updating geoJSONData:", geoJSON);
     setGeoJSONData(geoJSON);
   };
+
+  console.log("Passing onGeoJsonUpdate prop:", handleGeoJSONUpdate);
+  console.log("Initial onGeoJsonUpdate type:", typeof handleGeoJSONUpdate);
 
   // Trigger a resize on the Map component when resizing ends
   const handleDragEnd = () => {
