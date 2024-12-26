@@ -33,19 +33,24 @@ async function createServer() {
       let lastContext = null;
       let fullResponse = '';
 
+      // try to replace with ollama api
+      // try to receive the response and figure out if geoservice should be used
+      // figure out how to send json response to the client
       const response = await axios.post(`${OLLAMA_BASE_URL}/api/generate`, {
         model: 'llama3.2',
         prompt: message,
         context,
-        system: `You are a geospatial assistant task with answering questions about everything related to geo locations. 
+        system: `You are an assistant task with answering all sorts of questions.
         Please ensure that your responses are socially unbiased and positive in nature.
         If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. 
         If you don't know the answer, please don't share false information.
         
-        For geographical entities which are subject of question, generate GeoJSON entities with coordinates like in this example:
+        If any geographical entity was subject of question, or if any appears in the response, 
+        generate GeoJSON entity for each with coordinates like in this example:
+        
         For exmample, use GeoJSON Point type:
 
-          For points (e.g., landmarks, cities): 
+          For points (e.g., landmarks, cities, mountain peaks etc.): 
           {
             "type": "FeatureCollection",
             "features": [{

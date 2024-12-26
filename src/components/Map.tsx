@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { AlertCircle } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
-import type { FeatureCollection, Feature, GeoJsonProperties } from 'geojson';
+import type { FeatureCollection } from 'geojson';
 import L from 'leaflet';
 
 const INITIAL_VIEW = {
-  center: [20, 0],
+  center: [20, 0] as [number, number],
   zoom: 2,
   bounds: L.latLngBounds(
     L.latLng(-60, -170),
@@ -17,7 +17,7 @@ const INITIAL_VIEW = {
 function MapResizeHandler() {
   const map = useMap();
   const containerRef = useRef<HTMLElement | null>(null);
-  const debounceTimerRef = useRef<number | null>(null);
+  const resizeTimerRef = useRef<number>();
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -26,12 +26,12 @@ function MapResizeHandler() {
 
     if (!containerRef.current) return;
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      if (debounceTimerRef.current) {
-        window.clearTimeout(debounceTimerRef.current);
+    const resizeObserver = new ResizeObserver(() => {
+      if (resizeTimerRef.current) {
+        window.clearTimeout(resizeTimerRef.current);
       }
 
-      debounceTimerRef.current = window.setTimeout(() => {
+      resizeTimerRef.current = window.setTimeout(() => {
         map.invalidateSize();
       }, 100);
     });
@@ -42,8 +42,8 @@ function MapResizeHandler() {
       if (containerRef.current) {
         resizeObserver.unobserve(containerRef.current);
       }
-      if (debounceTimerRef.current) {
-        window.clearTimeout(debounceTimerRef.current);
+      if (resizeTimerRef.current) {
+        window.clearTimeout(resizeTimerRef.current);
       }
     };
   }, [map]);
@@ -51,71 +51,74 @@ function MapResizeHandler() {
   return null;
 }
 
-function MapController({ geoJsonData }: { geoJsonData: FeatureCollection | null }) {
+const GeoJSONLayer = React.memo(({ data }: { data: FeatureCollection }) => {
   const map = useMap();
-  const layersRef = useRef<L.GeoJSON[]>([]);
-  
+  const layerRef = useRef<L.GeoJSON | null>(null);
+  const dataRef = useRef<string>(JSON.stringify(data));
+
+  const style = useMemo(() => ({
+    color: '#2563eb',
+    weight: 2,
+    fillColor: '#3b82f6',
+    fillOpacity: 0.2
+  }), []);
+
   useEffect(() => {
-    if (!geoJsonData) {
-      map.fitBounds(INITIAL_VIEW.bounds);
-      return;
+    const newDataString = JSON.stringify(data);
+    if (dataRef.current === newDataString && layerRef.current) {
+      return; // Data hasn't changed, skip update
+    }
+    dataRef.current = newDataString;
+
+    // Clean up existing layer
+    if (layerRef.current) {
+      layerRef.current.remove();
+      layerRef.current = null;
     }
 
-    try {
-      const newLayer = L.geoJSON(geoJsonData, {
-        style: (feature) => ({
-          color: '#2563eb',
-          weight: 2,
-          fillColor: '#3b82f6',
-          fillOpacity: 0.2
-        }),
-        pointToLayer: (feature, latlng) => {
-          return L.marker(latlng);
-        },
-        onEachFeature: (feature: Feature<any, GeoJsonProperties>, layer) => {
-          if (feature.properties?.name || feature.properties?.description) {
-            layer.bindPopup(`
-              <div class="font-sans">
-                <h3 class="font-semibold">${feature.properties.name || ''}</h3>
-                <p>${feature.properties.description || ''}</p>
-              </div>
-            `);
-          }
+    // Create new layer
+    layerRef.current = L.geoJSON(data, {
+      style,
+      pointToLayer: (feature, latlng) => L.marker(latlng),
+      onEachFeature: (feature, layer) => {
+        if (feature.properties?.name || feature.properties?.description) {
+          const popup = L.popup().setContent(`
+            <div class="font-sans">
+              <h3 class="font-semibold">${feature.properties.name || ''}</h3>
+              <p>${feature.properties.description || ''}</p>
+            </div>
+          `);
+          layer.bindPopup(popup);
         }
-      }).addTo(map);
+      }
+    }).addTo(map);
 
-      layersRef.current.push(newLayer);
-
-      // Calculate bounds including all layers
-      const bounds = L.latLngBounds([]);
-      layersRef.current.forEach(layer => {
-        bounds.extend(layer.getBounds());
+    // Calculate and set bounds
+    const bounds = layerRef.current.getBounds();
+    if (bounds.isValid()) {
+      const extendedBounds = bounds.pad(0.5);
+      requestAnimationFrame(() => {
+        map.fitBounds(extendedBounds, {
+          padding: [50, 50],
+          maxZoom: 8,
+          animate: true,
+          duration: 1.5
+        });
       });
-
-      // Extend bounds by a percentage to show more context
-      const extendedBounds = bounds.pad(0.5); // Add 50% padding around the bounds
-
-      // Fit bounds with more relaxed settings
-      map.fitBounds(extendedBounds, { 
-        padding: [50, 50],
-        maxZoom: 8, // Lower maxZoom for less aggressive zooming
-        animate: true,
-        duration: 1.5
-      });
-    } catch (error) {
-      console.error('Error handling GeoJSON:', error);
     }
 
     return () => {
-      if (!geoJsonData) {
-        layersRef.current.forEach(layer => layer.removeFrom(map));
-        layersRef.current = [];
+      if (layerRef.current) {
+        layerRef.current.remove();
+        layerRef.current = null;
       }
     };
-  }, [geoJsonData, map]);
+  }, [map, data, style]);
 
   return null;
-}
+});
+
+GeoJSONLayer.displayName = 'GeoJSONLayer';
 
 interface MapProps {
   geoJsonData: FeatureCollection | null;
@@ -155,7 +158,7 @@ export default function Map({ geoJsonData }: MapProps) {
           error: handleTileError
         }}
       />
-      <MapController geoJsonData={geoJsonData} />
+      {geoJsonData && <GeoJSONLayer data={geoJsonData} />}
       <MapResizeHandler />
     </MapContainer>
   );
