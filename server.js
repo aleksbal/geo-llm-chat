@@ -1,4 +1,5 @@
 import express from 'express';
+import ollama from 'ollama';
 import { createServer as createViteServer } from 'vite';
 import axios from 'axios';
 
@@ -20,7 +21,7 @@ async function createServer() {
 
   // Handle streaming chat requests
   app.post('/api/chat', async (req, res) => {
-    const { message, conversationId = Date.now().toString() } = req.body;
+    const { msg, conversationId = Date.now().toString() } = req.body;
     
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
@@ -36,7 +37,11 @@ async function createServer() {
       // try to replace with ollama api
       // try to receive the response and figure out if geoservice should be used
       // figure out how to send json response to the client
-      const response = await axios.post(`${OLLAMA_BASE_URL}/api/generate`, {
+      const message = { role: 'user', content: msg }
+      const response = await ollama.chat({ model: 'llama3.2', messages: [message], stream: true })
+
+      /*
+      const responsex = await ollama.chat({
         model: 'llama3.2',
         prompt: message,
         context,
@@ -81,38 +86,32 @@ async function createServer() {
         responseType: 'stream'
       });
 
-      response.data.on('data', chunk => {
-        const lines = chunk.toString().split('\n').filter(Boolean);
-        lines.forEach(line => {
-          try {
-            const data = JSON.parse(line);
-            if (data.response) {
-              fullResponse += data.response;
-              res.write(`data: ${JSON.stringify({ response: data.response })}\n\n`);
-            }
-            if (data.context) {
-              lastContext = data.context;
-            }
-            if (data.done) {
-              // Store the final context for future messages
-              if (lastContext) {
-                conversations.set(conversationId, lastContext);
-              }
-              res.write(`data: ${JSON.stringify({ done: true, conversationId })}\n\n`);
-              res.end();
-            }
-          } catch (e) {
-            console.error('Error parsing streaming response:', e);
+      process.stdout.write(part.message.content)
+
+*/
+      for await (const data of response) {
+      //process.stdout.write(data.message.content)
+        try {
+          //const data = JSON.parse(part);
+          if (data.message.content) {
+            fullResponse += data.response;
+            res.write(`data: ${JSON.stringify({ response: data.response })}\n\n`);
           }
-        });
-      });
-
-      response.data.on('error', error => {
-        console.error('Stream error:', error);
-        res.write(`data: ${JSON.stringify({ error: 'Stream error occurred' })}\n\n`);
-        res.end();
-      });
-
+          if (data.context) {
+            lastContext = data.context;
+          }
+          if (data.done) {
+            // Store the final context for future messages
+            if (lastContext) {
+              conversations.set(conversationId, lastContext);
+            }
+            res.write(`data: ${JSON.stringify({ done: true, conversationId })}\n\n`);
+            res.end();
+          }
+        } catch (e) {
+          console.error('Error parsing streaming response:', e);
+        }
+      }
     } catch (error) {
       console.error('Ollama API error:', error);
       res.write(`data: ${JSON.stringify({ 
