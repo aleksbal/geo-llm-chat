@@ -12,11 +12,11 @@ function subtractTwoNumbers(args: { a: number, b: number }): number {
     return args.a - args.b;
 }
 
-// Call local running service to get coordinates for location
+// HTTP GET Call (local running service) to get GeoJSON data
 async function geoJson(args: { name: string }): Promise<FeatureCollection> {
     try {
         // Make a GET request to the local service
-        const response = await axios.get(`http://localhost:3000/geospatial`, {
+        const response = await axios.get(`http://localhost:3020/api/search`, {
             params: { name: args.name },
         });
 
