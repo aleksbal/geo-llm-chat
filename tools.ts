@@ -73,10 +73,10 @@ const geoJsonTool = {
         name: 'geoJson',
         description: 'Tool definition to get geospatial location data for a given name',
         parameters: {
-            type: 'string',
+            type: 'object',
             required: ['name'],
             properties: {
-                a: { type: 'name', description: 'Name of geospatial location like city, mountain, river' }
+                name: { type: 'string', description: 'Name of geospatial location such as city, mountain, river' }
             }
         }
     }
@@ -86,26 +86,29 @@ async function run(model: string) {
     const messages = [{ role: 'user', content: 'What is three minus one?' }];
     console.log('Prompt:', messages[0].content);
 
-    const availableFunctions = {
-        addTwoNumbers: addTwoNumbers,
-        subtractTwoNumbers: subtractTwoNumbers
-    };
+    // Define the available functions using a Map
+    const availableFunctions = new Map<string, (args: any) => any>([
+        ['addTwoNumbers', addTwoNumbers],
+        ['subtractTwoNumbers', subtractTwoNumbers],
+        ['geoJson', geoJson]
+    ]);
 
     const response = await ollama.chat({
         model: model,
         messages: messages,
-        tools: [addTwoNumbersTool, subtractTwoNumbersTool]
+        tools: [addTwoNumbersTool, subtractTwoNumbersTool, geoJsonTool]
     });
 
     let output: number;
     if (response.message.tool_calls) {
         // Process tool calls from the response
         for (const tool of response.message.tool_calls) {
-            const functionToCall = availableFunctions[tool.function.name];
+            
+            const functionToCall = availableFunctions.get(tool.function.name);
             if (functionToCall) {
                 console.log('Calling function:', tool.function.name);
                 console.log('Arguments:', tool.function.arguments);
-                output = functionToCall(tool.function.arguments);
+                output = await functionToCall(tool.function.arguments);
                 console.log('Function output:', output);
 
                 // Add the function response to messages for the model to use
