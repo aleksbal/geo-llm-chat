@@ -1,13 +1,35 @@
 import ollama from 'ollama';
+import axios from 'axios'; // Include axios for making HTTP requests
+import { FeatureCollection, GeoJSON } from 'geojson';
 
-// Add two numbers function
+// Add two numbers function (tool)
 function addTwoNumbers(args: { a: number, b: number }): number {
     return args.a + args.b;
 }
 
-// Subtract two numbers function 
+// Subtract two numbers function (tool)
 function subtractTwoNumbers(args: { a: number, b: number }): number {
     return args.a - args.b;
+}
+
+// Call local running service to get coordinates for location
+async function geoJson(args: { name: string }): Promise<FeatureCollection> {
+    try {
+        // Make a GET request to the local service
+        const response = await axios.get(`http://localhost:3000/geospatial`, {
+            params: { name: args.name },
+        });
+
+        // Validate and return the GeoJSON feature collection
+        if (response.data && response.data.type === 'FeatureCollection') {
+            return response.data as FeatureCollection;
+        } else {
+            throw new Error('Invalid GeoJSON data received from the server');
+        }
+    } catch (error) {
+        console.error('Error fetching geospatial data:', error);
+        throw new Error('Failed to fetch geospatial data');
+    }
 }
 
 // Tool definition for add function
@@ -39,6 +61,22 @@ const subtractTwoNumbersTool = {
             properties: {
                 a: { type: 'number', description: 'The first number' },
                 b: { type: 'number', description: 'The second number' }
+            }
+        }
+    }
+};
+
+// Tool definition to get geospatial location data for a given name
+const geoJsonTool = {
+    type: 'function',
+    function: {
+        name: 'geoJson',
+        description: 'Tool definition to get geospatial location data for a given name',
+        parameters: {
+            type: 'string',
+            required: ['name'],
+            properties: {
+                a: { type: 'name', description: 'Name of geospatial location like city, mountain, river' }
             }
         }
     }
