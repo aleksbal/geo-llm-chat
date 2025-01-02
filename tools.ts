@@ -71,7 +71,7 @@ const geoJsonTool = {
     type: 'function',
     function: {
         name: 'geoJson',
-        description: 'Tool definition to get geospatial location data for a given name',
+        description: 'Tool definition to get the GeoJSON geospatial data for a given location name',
         parameters: {
             type: 'object',
             required: ['name'],
@@ -83,7 +83,7 @@ const geoJsonTool = {
 };
 
 async function run(model: string) {
-    const messages = [{ role: 'user', content: 'What is three minus one?' }];
+    const messages = [{ role: 'user', content: 'What is the capital of Germany and where is it located?' }];
     console.log('Prompt:', messages[0].content);
 
     // Define the available functions using a Map
